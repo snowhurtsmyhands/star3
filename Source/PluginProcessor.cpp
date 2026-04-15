@@ -62,12 +62,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout StarFluxAudioProcessor::crea
 
     auto f = [](auto id, auto name, float min, float max, float d){ return std::make_unique<AudioParameterFloat>(id, name, NormalisableRange<float>(min,max), d); };
 
-    p.push_back(f(density, "Density", 0.05f, 1.0f, 0.45f));
-    p.push_back(f(size, "Size", 0.2f, 1.8f, 0.7f));
-    p.push_back(f(brightness, "Brightness", 0.1f, 2.0f, 1.0f));
+    p.push_back(f(density, "Density", 0.05f, 1.0f, 0.62f));
+    p.push_back(f(size, "Size", 0.2f, 1.8f, 0.95f));
+    p.push_back(f(brightness, "Brightness", 0.1f, 2.0f, 1.25f));
     p.push_back(std::make_unique<AudioParameterChoice>(motionPreset, "Motion Preset", StringArray{ "Static", "Drift", "Forward", "Float" }, 1)); // default: Drift
     p.push_back(f(motionSpeed, "Speed", 0.0f, 1.5f, 0.08f)); // small non-zero default so stars move
-    p.push_back(f(depth, "Depth", 0.2f, 2.0f, 1.0f));
+    p.push_back(f(depth, "Depth", 0.2f, 2.0f, 0.8f));
     p.push_back(f(seed, "Seed", 0.0f, 9999.0f, 777.0f));
 
     p.push_back(std::make_unique<AudioParameterBool>(twinkleOn, "Twinkle", true));
@@ -76,8 +76,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout StarFluxAudioProcessor::crea
 
     auto lane = [&](auto amount, auto source, auto fmin, auto fmax, auto a, auto r, const String& name)
     {
-        p.push_back(f(amount, name + " Amount", 0.0f, 2.0f, 0.0f));
-        p.push_back(std::make_unique<AudioParameterChoice>(source, name + " Source", StringArray{ "Off", "Audio Envelope", "Audio Transients", "MIDI Gate", "MIDI Velocity" }, 0));
+        p.push_back(f(amount, name + " Amount", 0.0f, 2.0f, 0.55f));
+        p.push_back(std::make_unique<AudioParameterChoice>(source, name + " Source", StringArray{ "Off", "Audio", "MIDI" }, 1));
         p.push_back(f(fmin, name + " Freq Min", 20.0f, 12000.0f, 20.0f));
         p.push_back(f(fmax, name + " Freq Max", 200.0f, 20000.0f, 6000.0f));
         p.push_back(f(a, name + " Attack", 0.001f, 1.0f, 0.035f));

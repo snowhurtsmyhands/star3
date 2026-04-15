@@ -45,7 +45,28 @@ void StarRenderer::newOpenGLContextCreated()
 
 void StarRenderer::renderOpenGL()
 {
+    if (auto* ctx = juce::OpenGLContext::getCurrentContext())
+    {
+        if (auto* target = ctx->getTargetComponent())
+        {
+            const auto fbW = juce::roundToInt((float) ctx->getRenderingScale() * (float) target->getWidth());
+            const auto fbH = juce::roundToInt((float) ctx->getRenderingScale() * (float) target->getHeight());
+            juce::gl::glViewport(0, 0, juce::jmax(1, fbW), juce::jmax(1, fbH));
+        }
+    }
+
+    juce::gl::glDisable(juce::gl::GL_DEPTH_TEST);
+    juce::gl::glDisable(juce::gl::GL_CULL_FACE);
+    juce::gl::glDisable(juce::gl::GL_SCISSOR_TEST);
+    juce::gl::glMatrixMode(juce::gl::GL_PROJECTION);
+    juce::gl::glLoadIdentity();
+    juce::gl::glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
+    juce::gl::glMatrixMode(juce::gl::GL_MODELVIEW);
+    juce::gl::glLoadIdentity();
+
     juce::OpenGLHelpers::clear(juce::Colour::fromRGB(3, 5, 10));
+    juce::gl::glEnable(juce::gl::GL_BLEND);
+    juce::gl::glBlendFunc(juce::gl::GL_SRC_ALPHA, juce::gl::GL_ONE_MINUS_SRC_ALPHA);
 
     constexpr float dt = 1.0f / 60.0f;
     time += dt;
@@ -89,9 +110,7 @@ void StarRenderer::renderOpenGL()
 
         float raw = 0.0f;
         if      (source == 1) raw = bandEnergy(analysis, minHz, maxHz);
-        else if (source == 2) raw = analysis.transient;
-        else if (source == 3) raw = midiEnv > 0.02f ? 1.0f : 0.0f;
-        else if (source == 4) raw = midiEnv;
+        else if (source == 2) raw = midiEnv;
 
         state = smoothTowards(state, juce::jlimit(0.0f, 1.0f, raw), attack, release, dt);
         return state * amount;
@@ -138,6 +157,7 @@ void StarRenderer::renderOpenGL()
     const float audioEnergy    = juce::jlimit(0.0f, 1.0f, analysis.rms * 5.0f);
     const float audioBrightMul = 1.0f + audioEnergy * 0.65f;
 
+    int starsDrawn = 0;
     for (const auto& s : starField.getRenderStars())
     {
         if (s.brightness <= 0.0005f)
@@ -149,7 +169,7 @@ void StarRenderer::renderOpenGL()
         const float ry = rp.y * cp - rz * sp;
         rp = { rx, ry, rz * cp + rp.y * sp };
 
-        const float depthScale = 1.0f / juce::jlimit(0.3f, 3.0f, 1.0f + rp.z * 0.8f);
+        const float depthScale = 1.0f / juce::jlimit(0.35f, 3.2f, 1.0f + rp.z * 0.72f);
         const float px = rp.x * depthScale;
         const float py = rp.y * depthScale;
 
@@ -157,8 +177,8 @@ void StarRenderer::renderOpenGL()
         if (std::abs(px) > 1.35f || std::abs(py) > 1.35f)
             continue;
 
-        const float rad      = juce::jlimit(0.001f, 0.025f, 0.0022f + s.size * depthScale * 0.008f);
-        const float vignette = juce::jlimit(0.15f, 1.0f, 1.0f - 0.28f * (px * px + py * py));
+        const float rad      = juce::jlimit(0.0015f, 0.030f, 0.0032f + s.size * depthScale * 0.011f);
+        const float vignette = juce::jlimit(0.42f, 1.0f, 1.0f - 0.20f * (px * px + py * py));
         const float brt      = juce::jlimit(0.0f, 1.0f, s.brightness * vignette * audioBrightMul);
 
         // Cool blue-white tint
@@ -168,7 +188,7 @@ void StarRenderer::renderOpenGL()
 
         // Outer glow disc
         juce::gl::glBegin(juce::gl::GL_TRIANGLE_FAN);
-        juce::gl::glColor4f(r, g, b, brt);
+        juce::gl::glColor4f(r, g, b, juce::jmax(0.30f, brt));
         juce::gl::glVertex2f(px, py);
         constexpr int segs = 10;
         for (int i = 0; i <= segs; ++i)
@@ -178,13 +198,14 @@ void StarRenderer::renderOpenGL()
                                   py + std::sin(a) * rad);
         }
         juce::gl::glEnd();
+        ++starsDrawn;
 
         // Bright white core for larger / bright stars — premium sparkle
         if (brt > 0.45f)
         {
             const float cr = rad * 0.3f;
             juce::gl::glBegin(juce::gl::GL_TRIANGLE_FAN);
-            juce::gl::glColor4f(1.0f, 1.0f, 1.0f, brt * 0.75f);
+            juce::gl::glColor4f(1.0f, 1.0f, 1.0f, juce::jmax(0.35f, brt * 0.75f));
             juce::gl::glVertex2f(px, py);
             for (int i = 0; i <= segs; ++i)
             {
@@ -194,6 +215,24 @@ void StarRenderer::renderOpenGL()
             }
             juce::gl::glEnd();
         }
+    }
+
+    // Safety fallback: always draw at least a tiny center glint if everything was culled.
+    outputHasVisibleStars.store(starsDrawn > 0, std::memory_order_relaxed);
+
+    if (starsDrawn == 0)
+    {
+        juce::gl::glBegin(juce::gl::GL_TRIANGLE_FAN);
+        juce::gl::glColor4f(0.75f, 0.88f, 1.0f, 0.95f);
+        juce::gl::glVertex2f(0.0f, 0.0f);
+        constexpr int segs = 12;
+        constexpr float rad = 0.015f;
+        for (int i = 0; i <= segs; ++i)
+        {
+            const float a = juce::MathConstants<float>::twoPi * (float) i / (float) segs;
+            juce::gl::glVertex2f(std::cos(a) * rad, std::sin(a) * rad);
+        }
+        juce::gl::glEnd();
     }
 }
 

@@ -1,18 +1,6 @@
 #include "PluginEditor.h"
 #include "engine/ParameterIDs.h"
 
-// ──────────────────────────────────────────────────────────────────────────────
-// StarFlux Editor — Premium minimal UI
-//
-// Changes from original:
-//  • Single small square "⊞" button (top-right), fades when idle
-//  • Name + preset selector appear UNDER the controls button (collapsed when closed)
-//  • NO persistent UI on screen — everything fades after idle timeout
-//  • Controls panel slides in from the right
-//  • Drag viewport to rotate (only when panel is not under cursor)
-//  • Value numbers: compact, bold, 3 significant figures max
-// ──────────────────────────────────────────────────────────────────────────────
-
 StarFluxAudioProcessorEditor::StarFluxAudioProcessorEditor(StarFluxAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p), renderer(p)
 {
@@ -20,16 +8,17 @@ StarFluxAudioProcessorEditor::StarFluxAudioProcessorEditor(StarFluxAudioProcesso
     setResizable(true, true);
     setResizeLimits(820, 520, 1600, 1000);
 
-    // ── Controls toggle button: small square icon ──
-    controlsButton.setButtonText(juce::String::fromUTF8("\xe2\x8a\x9e")); // ⊞ grid icon
-    controlsButton.setColour(juce::TextButton::buttonColourId,    juce::Colour(0xff0d1520));
-    controlsButton.setColour(juce::TextButton::buttonOnColourId,  juce::Colour(0xff1a2840));
-    controlsButton.setColour(juce::TextButton::textColourOffId,   juce::Colour(0xffa0b8d8));
-    controlsButton.setColour(juce::TextButton::textColourOnId,    juce::Colour(0xffc8dff5));
+    juce::Path squareOutline;
+    squareOutline.addRectangle(1.0f, 1.0f, 14.0f, 14.0f);
+    controlsButton.setShape(squareOutline, false, false, false);
+    controlsButton.setTriggeredOnMouseDown(false);
+    controlsButton.setOutline(juce::Colour(0xff79b9ff).withAlpha(0.72f), 1.2f);
+    controlsButton.setOnColours(juce::Colours::transparentBlack, juce::Colour(0xff8fc8ff).withAlpha(0.20f),
+                                juce::Colour(0xff9ad0ff).withAlpha(0.34f));
     controlsButton.onClick = [this]
     {
         controlsOpen = !controlsOpen;
-        uiAlpha = 1.0f; // show UI when toggling
+        buttonAlpha = 1.0f;
         idleTimer = 0.0f;
     };
     addAndMakeVisible(controlsButton);
@@ -41,16 +30,53 @@ StarFluxAudioProcessorEditor::StarFluxAudioProcessorEditor(StarFluxAudioProcesso
     addAndMakeVisible(title);
 
     // Preset combo — shown below title when open
+    presetBox.addItemList({ "Static", "Drift", "Forward", "Float" }, 1);
     presetBox.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff0a1018));
     presetBox.setColour(juce::ComboBox::textColourId,       juce::Colour(0xffa0b8d8));
     presetBox.setColour(juce::ComboBox::outlineColourId,    juce::Colour(0x553a84c6));
     addAndMakeVisible(presetBox);
 
+    inputModeButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0x22000000));
+    inputModeButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffb4d2f1));
+    inputModeButton.setColour(juce::TextButton::outlineColourId, juce::Colour(0x553a84c6));
+    inputModeButton.onClick = [this]
+    {
+        useMidiInputMode = !useMidiInputMode;
+        inputModeButton.setButtonText(useMidiInputMode ? "MIDI" : "Audio");
+
+        const int sourceIndex = useMidiInputMode ? 2 : 1;
+        for (auto* id : { starflux::params::motionLaneSource, starflux::params::sizeLaneSource,
+                          starflux::params::brightnessLaneSource, starflux::params::twinkleLaneSource })
+        {
+            if (auto* p = processor.apvts.getParameter(id))
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost(p->convertTo0to1((float) sourceIndex));
+                p->endChangeGesture();
+            }
+        }
+    };
+    addAndMakeVisible(inputModeButton);
+
     addAndMakeVisible(controlsPanel);
 
     openGL.setRenderer(&renderer);
     openGL.attachTo(*this);
+    openGL.setComponentPaintingEnabled(true);
     openGL.setContinuousRepainting(true);
+
+    juce::Random rng(0x5f5f91);
+    fallbackStars.reserve(1400);
+    for (int i = 0; i < 1400; ++i)
+    {
+        FallbackStar s;
+        s.pos = { rng.nextFloat(), rng.nextFloat() };
+        s.vel = { (rng.nextFloat() - 0.5f) * 0.013f, (rng.nextFloat() - 0.5f) * 0.013f };
+        s.phase = rng.nextFloat() * juce::MathConstants<float>::twoPi;
+        s.size = 0.35f + rng.nextFloat() * 1.3f;
+        s.brightness = 0.5f + rng.nextFloat() * 0.7f;
+        fallbackStars.push_back(s);
+    }
 
     using namespace starflux::params;
     auto& s = processor.apvts;
@@ -69,28 +95,24 @@ StarFluxAudioProcessorEditor::StarFluxAudioProcessorEditor(StarFluxAudioProcesso
     sa(controlsPanel.twinkleAmount,twinkleAmount);
     sa(controlsPanel.twinkleSpeed, twinkleSpeed);
 
-    ca(controlsPanel.motionLane.source,   motionLaneSource);
     sa(controlsPanel.motionLane.amount,   motionLaneAmount);
     sa(controlsPanel.motionLane.freqMin,  motionLaneFreqMin);
     sa(controlsPanel.motionLane.freqMax,  motionLaneFreqMax);
     sa(controlsPanel.motionLane.attack,   motionLaneAttack);
     sa(controlsPanel.motionLane.release,  motionLaneRelease);
 
-    ca(controlsPanel.sizeLane.source,     sizeLaneSource);
     sa(controlsPanel.sizeLane.amount,     sizeLaneAmount);
     sa(controlsPanel.sizeLane.freqMin,    sizeLaneFreqMin);
     sa(controlsPanel.sizeLane.freqMax,    sizeLaneFreqMax);
     sa(controlsPanel.sizeLane.attack,     sizeLaneAttack);
     sa(controlsPanel.sizeLane.release,    sizeLaneRelease);
 
-    ca(controlsPanel.brightnessLane.source,   brightnessLaneSource);
     sa(controlsPanel.brightnessLane.amount,   brightnessLaneAmount);
     sa(controlsPanel.brightnessLane.freqMin,  brightnessLaneFreqMin);
     sa(controlsPanel.brightnessLane.freqMax,  brightnessLaneFreqMax);
     sa(controlsPanel.brightnessLane.attack,   brightnessLaneAttack);
     sa(controlsPanel.brightnessLane.release,  brightnessLaneRelease);
 
-    ca(controlsPanel.twinkleLane.source,  twinkleLaneSource);
     sa(controlsPanel.twinkleLane.amount,  twinkleLaneAmount);
     sa(controlsPanel.twinkleLane.freqMin, twinkleLaneFreqMin);
     sa(controlsPanel.twinkleLane.freqMax, twinkleLaneFreqMax);
@@ -102,6 +124,17 @@ StarFluxAudioProcessorEditor::StarFluxAudioProcessorEditor(StarFluxAudioProcesso
     sa(controlsPanel.midiSustain,  midiSustain);
     sa(controlsPanel.midiRelease,  midiRelease);
 
+    if (auto* source = processor.apvts.getRawParameterValue(motionLaneSource))
+        useMidiInputMode = ((int) source->load(std::memory_order_relaxed) == 2);
+    inputModeButton.setButtonText(useMidiInputMode ? "MIDI" : "Audio");
+    {
+        const int sourceIndex = useMidiInputMode ? 2 : 1;
+        for (auto* id : { starflux::params::motionLaneSource, starflux::params::sizeLaneSource,
+                          starflux::params::brightnessLaneSource, starflux::params::twinkleLaneSource })
+            if (auto* p = processor.apvts.getParameter(id))
+                p->setValueNotifyingHost(p->convertTo0to1((float) sourceIndex));
+    }
+
     startTimerHz(60);
 }
 
@@ -110,12 +143,49 @@ StarFluxAudioProcessorEditor::~StarFluxAudioProcessorEditor() { openGL.detach();
 void StarFluxAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour::fromRGB(3, 5, 10));
+
+    auto* densityP = processor.apvts.getRawParameterValue(starflux::params::density);
+    auto* sizeP = processor.apvts.getRawParameterValue(starflux::params::size);
+    auto* brightP = processor.apvts.getRawParameterValue(starflux::params::brightness);
+    auto* twinkleP = processor.apvts.getRawParameterValue(starflux::params::twinkleOn);
+    auto* twinkleAmtP = processor.apvts.getRawParameterValue(starflux::params::twinkleAmount);
+
+    const float density = densityP ? densityP->load(std::memory_order_relaxed) : 0.62f;
+    const float size    = sizeP ? sizeP->load(std::memory_order_relaxed) : 0.95f;
+    const float bright  = brightP ? brightP->load(std::memory_order_relaxed) : 1.25f;
+    const bool twinkleOn = twinkleP ? twinkleP->load(std::memory_order_relaxed) > 0.5f : true;
+    const float twinkleAmount = twinkleAmtP ? twinkleAmtP->load(std::memory_order_relaxed) : 0.35f;
+
+    const int visibleCount = juce::jlimit(280, (int) fallbackStars.size(),
+                                          (int) std::round((float) fallbackStars.size() * juce::jlimit(0.2f, 1.0f, density)));
+    const float baseRadius = juce::jmap(size, 0.2f, 1.8f, 0.8f, 2.4f);
+    const float alphaScale = juce::jlimit(0.25f, 1.3f, bright * 0.72f);
+
+    for (int i = 0; i < visibleCount; ++i)
+    {
+        const auto& s = fallbackStars[(size_t) i];
+        const float cx = s.pos.x * (float) getWidth();
+        const float cy = s.pos.y * (float) getHeight();
+        const float tw = twinkleOn ? (1.0f + (0.15f + twinkleAmount * 0.25f) * std::sin(fallbackTime * 1.9f + s.phase)) : 1.0f;
+        const float radius = baseRadius * s.size * (0.55f + 0.45f * tw);
+        const float a = juce::jlimit(0.06f, 0.95f, s.brightness * alphaScale * (0.65f + 0.35f * tw));
+
+        g.setColour(juce::Colour(0xff8fc5ff).withAlpha(a * 0.75f));
+        g.fillEllipse(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f);
+
+        if (a > 0.45f)
+        {
+            const float core = radius * 0.45f;
+            g.setColour(juce::Colours::white.withAlpha(a * 0.65f));
+            g.fillEllipse(cx - core, cy - core, core * 2.0f, core * 2.0f);
+        }
+    }
 }
 
 void StarFluxAudioProcessorEditor::resized()
 {
-    // ── Button: 36×36 square, top-right corner ──
-    const int btnSize = 36;
+    // ── Button: compact outlined square, top-right corner ──
+    const int btnSize = 24;
     const int margin  = 10;
     controlsButton.setBounds(getWidth() - btnSize - margin, margin, btnSize, btnSize);
 
@@ -126,41 +196,44 @@ void StarFluxAudioProcessorEditor::resized()
 
     title.setBounds(panelX, btnSize + margin + 6,  drawerWidth, 16);
     presetBox.setBounds(panelX, btnSize + margin + 26, drawerWidth, 24);
+    inputModeButton.setBounds(panelX, btnSize + margin + 54, drawerWidth, 20);
 
     title.setVisible(showHeaderInfo);
     presetBox.setVisible(showHeaderInfo);
+    inputModeButton.setVisible(showHeaderInfo);
 
     // ── Sliding panel ──
-    const int panelTop = btnSize + margin + 58;
+    const int panelTop = btnSize + margin + 80;
     auto panel = juce::Rectangle<int>(panelX, panelTop,
                                       (int)(drawerWidth * drawerAnim),
                                       getHeight() - panelTop - margin);
     controlsPanel.setBounds(panel);
     controlsPanel.setVisible(drawerAnim > 0.01f);
 
-    // Apply fade alpha
-    controlsButton.setAlpha(uiAlpha);
-    controlsPanel.setAlpha(uiAlpha);
-    title.setAlpha(uiAlpha);
-    presetBox.setAlpha(uiAlpha);
+    // Fade only applies to the closed-state access button.
+    controlsButton.setAlpha(buttonAlpha);
+    controlsPanel.setAlpha(1.0f);
+    title.setAlpha(1.0f);
+    presetBox.setAlpha(1.0f);
+    inputModeButton.setAlpha(1.0f);
 }
 
 void StarFluxAudioProcessorEditor::mouseMove(const juce::MouseEvent&)
 {
-    uiAlpha  = 1.0f;
+    buttonAlpha = 1.0f;
     idleTimer = 0.0f;
 }
 
 void StarFluxAudioProcessorEditor::mouseDown(const juce::MouseEvent& e)
 {
     lastDragPos = e.position;
-    uiAlpha    = 1.0f;
+    buttonAlpha = 1.0f;
     idleTimer  = 0.0f;
 }
 
 void StarFluxAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e)
 {
-    uiAlpha   = 1.0f;
+    buttonAlpha = 1.0f;
     idleTimer = 0.0f;
     auto d = e.position - lastDragPos;
     lastDragPos = e.position;
@@ -176,16 +249,37 @@ void StarFluxAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e)
 void StarFluxAudioProcessorEditor::timerCallback()
 {
     constexpr float dt       = 1.0f / 60.0f;
-    constexpr float fadeDelay = 3.0f;  // seconds before fade starts
-    constexpr float fadeRate  = 0.008f;
+    constexpr float fadeDelay = 2.3f;
+    constexpr float fadeRate  = 0.018f;
+    constexpr float minButtonAlpha = 0.22f;
 
     // Animate drawer
     drawerAnim += ((controlsOpen ? 1.0f : 0.0f) - drawerAnim) * 0.18f;
 
-    // Idle timer — fade UI after inactivity
+    // Idle timer — only fade the small top-right access button while panel is closed.
     idleTimer += dt;
-    if (idleTimer > fadeDelay)
-        uiAlpha = juce::jmax(0.0f, uiAlpha - fadeRate);
+    if (controlsOpen)
+    {
+        buttonAlpha = 1.0f;
+    }
+    else if (idleTimer > fadeDelay)
+    {
+        buttonAlpha = juce::jmax(minButtonAlpha, buttonAlpha - fadeRate);
+    }
+
+    fallbackTime += dt;
+    auto* speedP = processor.apvts.getRawParameterValue(starflux::params::motionSpeed);
+    const float speed = speedP ? speedP->load(std::memory_order_relaxed) : 0.08f;
+    const float drift = juce::jmap(speed, 0.0f, 1.5f, 0.25f, 3.5f) * dt;
+    for (auto& s : fallbackStars)
+    {
+        s.pos += s.vel * drift;
+        if (s.pos.x < 0.0f) s.pos.x += 1.0f;
+        if (s.pos.x > 1.0f) s.pos.x -= 1.0f;
+        if (s.pos.y < 0.0f) s.pos.y += 1.0f;
+        if (s.pos.y > 1.0f) s.pos.y -= 1.0f;
+    }
 
     resized();
+    repaint();
 }

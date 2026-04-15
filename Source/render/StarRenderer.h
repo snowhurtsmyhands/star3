@@ -20,6 +20,7 @@ public:
     void openGLContextClosing() override;
 
     void adjustView(float yawDelta, float pitchDelta) noexcept;
+    bool hasVisibleStars() const noexcept { return outputHasVisibleStars.load(std::memory_order_relaxed); }
 
 private:
     StarFluxAudioProcessor& processor;
@@ -37,5 +38,6 @@ private:
     float sizeState   = 0.0f;
     float brightState = 0.0f;
     float twinkleState= 0.0f;
+    std::atomic<bool> outputHasVisibleStars { false };
 };
 }

@@ -6,8 +6,8 @@ void AdvancedPanel::setupSlider(juce::Slider& s, const juce::String& name, int d
 {
     s.setName(name);
     s.setSliderStyle(juce::Slider::LinearHorizontal);
-    // Compact text box: bold, right-aligned, narrower
-    s.setTextBoxStyle(juce::Slider::TextBoxRight, false, 46, 16);
+    s.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    s.setPopupDisplayEnabled(true, false, nullptr);
     s.setNumDecimalPlacesToDisplay(decimals);
 
     // Compact formatter: 3 sig-fig max, strip trailing zeros, bold via font set on slider
@@ -26,16 +26,10 @@ void AdvancedPanel::setupSlider(juce::Slider& s, const juce::String& name, int d
         return juce::String(v, juce::jmin(decimals, 3));
     };
 
-    // Make text box font bold
-    s.setColour(juce::Slider::textBoxTextColourId, juce::Colour(0xffc0d4ee));
-    s.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff080c12));
-    s.setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0x22ffffff));
 }
 
 void AdvancedPanel::setupLane(LaneCard& lane, juce::Component& parent, const juce::String&)
 {
-    lane.source.addItemList({ "Off", "Audio Env", "Transient", "MIDI Gate", "MIDI Vel" }, 1);
-    parent.addAndMakeVisible(lane.source);
     setupSlider(lane.amount, "Amount", 2);
     setupSlider(lane.freqMin, "Freq Min", 0);
     setupSlider(lane.freqMax, "Freq Max", 0);
@@ -109,7 +103,6 @@ int AdvancedPanel::addSliderRow(int y, juce::Slider& s, int w)
 int AdvancedPanel::addLaneCard(int y, LaneCard& lane, const juce::String& title, int w)
 {
     y = addTitle(y, title, w);
-    lane.source.setBounds(10, y, w - 20, 24); y += 28;
     for (auto* s : { &lane.amount, &lane.freqMin, &lane.freqMax, &lane.attack, &lane.release }) y = addSliderRow(y, *s, w);
     return y + 4;
 }

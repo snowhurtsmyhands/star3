@@ -28,12 +28,15 @@ private:
 
     juce::Label title { {}, "StarFlux" };
     juce::ComboBox presetBox;
-    juce::TextButton controlsButton { "Controls" };
+    juce::ShapeButton controlsButton { "controlsButton",
+                                       juce::Colours::transparentBlack,
+                                       juce::Colours::transparentBlack,
+                                       juce::Colours::transparentBlack };
     starflux::ui::AdvancedPanel controlsPanel;
 
     bool controlsOpen = false;
     float drawerAnim  = 0.0f;
-    float uiAlpha     = 1.0f;
+    float buttonAlpha = 1.0f;
     float idleTimer   = 0.0f;
     juce::Point<float> lastDragPos;
 

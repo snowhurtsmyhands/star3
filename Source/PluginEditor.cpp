@@ -1,18 +1,6 @@
 #include "PluginEditor.h"
 #include "engine/ParameterIDs.h"
 
-// ──────────────────────────────────────────────────────────────────────────────
-// StarFlux Editor — Premium minimal UI
-//
-// Changes from original:
-//  • Single small square "⊞" button (top-right), fades when idle
-//  • Name + preset selector appear UNDER the controls button (collapsed when closed)
-//  • NO persistent UI on screen — everything fades after idle timeout
-//  • Controls panel slides in from the right
-//  • Drag viewport to rotate (only when panel is not under cursor)
-//  • Value numbers: compact, bold, 3 significant figures max
-// ──────────────────────────────────────────────────────────────────────────────
-
 StarFluxAudioProcessorEditor::StarFluxAudioProcessorEditor(StarFluxAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p), renderer(p)
 {
@@ -20,16 +8,17 @@ StarFluxAudioProcessorEditor::StarFluxAudioProcessorEditor(StarFluxAudioProcesso
     setResizable(true, true);
     setResizeLimits(820, 520, 1600, 1000);
 
-    // ── Controls toggle button: small square icon ──
-    controlsButton.setButtonText(juce::String::fromUTF8("\xe2\x8a\x9e")); // ⊞ grid icon
-    controlsButton.setColour(juce::TextButton::buttonColourId,    juce::Colour(0xff0d1520));
-    controlsButton.setColour(juce::TextButton::buttonOnColourId,  juce::Colour(0xff1a2840));
-    controlsButton.setColour(juce::TextButton::textColourOffId,   juce::Colour(0xffa0b8d8));
-    controlsButton.setColour(juce::TextButton::textColourOnId,    juce::Colour(0xffc8dff5));
+    juce::Path squareOutline;
+    squareOutline.addRectangle(1.0f, 1.0f, 14.0f, 14.0f);
+    controlsButton.setShape(squareOutline, false, false, false);
+    controlsButton.setTriggeredOnMouseDown(false);
+    controlsButton.setOutline(juce::Colour(0xff79b9ff).withAlpha(0.72f), 1.2f);
+    controlsButton.setOnColours(juce::Colours::transparentBlack, juce::Colour(0xff8fc8ff).withAlpha(0.20f),
+                                juce::Colour(0xff9ad0ff).withAlpha(0.34f));
     controlsButton.onClick = [this]
     {
         controlsOpen = !controlsOpen;
-        uiAlpha = 1.0f; // show UI when toggling
+        buttonAlpha = 1.0f;
         idleTimer = 0.0f;
     };
     addAndMakeVisible(controlsButton);
@@ -114,8 +103,8 @@ void StarFluxAudioProcessorEditor::paint(juce::Graphics& g)
 
 void StarFluxAudioProcessorEditor::resized()
 {
-    // ── Button: 36×36 square, top-right corner ──
-    const int btnSize = 36;
+    // ── Button: compact outlined square, top-right corner ──
+    const int btnSize = 24;
     const int margin  = 10;
     controlsButton.setBounds(getWidth() - btnSize - margin, margin, btnSize, btnSize);
 
@@ -138,29 +127,29 @@ void StarFluxAudioProcessorEditor::resized()
     controlsPanel.setBounds(panel);
     controlsPanel.setVisible(drawerAnim > 0.01f);
 
-    // Apply fade alpha
-    controlsButton.setAlpha(uiAlpha);
-    controlsPanel.setAlpha(uiAlpha);
-    title.setAlpha(uiAlpha);
-    presetBox.setAlpha(uiAlpha);
+    // Fade only applies to the closed-state access button.
+    controlsButton.setAlpha(buttonAlpha);
+    controlsPanel.setAlpha(1.0f);
+    title.setAlpha(1.0f);
+    presetBox.setAlpha(1.0f);
 }
 
 void StarFluxAudioProcessorEditor::mouseMove(const juce::MouseEvent&)
 {
-    uiAlpha  = 1.0f;
+    buttonAlpha = 1.0f;
     idleTimer = 0.0f;
 }
 
 void StarFluxAudioProcessorEditor::mouseDown(const juce::MouseEvent& e)
 {
     lastDragPos = e.position;
-    uiAlpha    = 1.0f;
+    buttonAlpha = 1.0f;
     idleTimer  = 0.0f;
 }
 
 void StarFluxAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e)
 {
-    uiAlpha   = 1.0f;
+    buttonAlpha = 1.0f;
     idleTimer = 0.0f;
     auto d = e.position - lastDragPos;
     lastDragPos = e.position;
@@ -176,16 +165,23 @@ void StarFluxAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e)
 void StarFluxAudioProcessorEditor::timerCallback()
 {
     constexpr float dt       = 1.0f / 60.0f;
-    constexpr float fadeDelay = 3.0f;  // seconds before fade starts
-    constexpr float fadeRate  = 0.008f;
+    constexpr float fadeDelay = 2.3f;
+    constexpr float fadeRate  = 0.018f;
+    constexpr float minButtonAlpha = 0.22f;
 
     // Animate drawer
     drawerAnim += ((controlsOpen ? 1.0f : 0.0f) - drawerAnim) * 0.18f;
 
-    // Idle timer — fade UI after inactivity
+    // Idle timer — only fade the small top-right access button while panel is closed.
     idleTimer += dt;
-    if (idleTimer > fadeDelay)
-        uiAlpha = juce::jmax(0.0f, uiAlpha - fadeRate);
+    if (controlsOpen)
+    {
+        buttonAlpha = 1.0f;
+    }
+    else if (idleTimer > fadeDelay)
+    {
+        buttonAlpha = juce::jmax(minButtonAlpha, buttonAlpha - fadeRate);
+    }
 
     resized();
 }

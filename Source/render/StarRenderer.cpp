@@ -46,6 +46,8 @@ void StarRenderer::newOpenGLContextCreated()
 void StarRenderer::renderOpenGL()
 {
     juce::OpenGLHelpers::clear(juce::Colour::fromRGB(3, 5, 10));
+    juce::gl::glEnable(juce::gl::GL_BLEND);
+    juce::gl::glBlendFunc(juce::gl::GL_SRC_ALPHA, juce::gl::GL_ONE_MINUS_SRC_ALPHA);
 
     constexpr float dt = 1.0f / 60.0f;
     time += dt;
@@ -149,7 +151,7 @@ void StarRenderer::renderOpenGL()
         const float ry = rp.y * cp - rz * sp;
         rp = { rx, ry, rz * cp + rp.y * sp };
 
-        const float depthScale = 1.0f / juce::jlimit(0.3f, 3.0f, 1.0f + rp.z * 0.8f);
+        const float depthScale = 1.0f / juce::jlimit(0.35f, 3.2f, 1.0f + rp.z * 0.72f);
         const float px = rp.x * depthScale;
         const float py = rp.y * depthScale;
 
@@ -157,8 +159,8 @@ void StarRenderer::renderOpenGL()
         if (std::abs(px) > 1.35f || std::abs(py) > 1.35f)
             continue;
 
-        const float rad      = juce::jlimit(0.001f, 0.025f, 0.0022f + s.size * depthScale * 0.008f);
-        const float vignette = juce::jlimit(0.15f, 1.0f, 1.0f - 0.28f * (px * px + py * py));
+        const float rad      = juce::jlimit(0.0015f, 0.030f, 0.0032f + s.size * depthScale * 0.011f);
+        const float vignette = juce::jlimit(0.42f, 1.0f, 1.0f - 0.20f * (px * px + py * py));
         const float brt      = juce::jlimit(0.0f, 1.0f, s.brightness * vignette * audioBrightMul);
 
         // Cool blue-white tint
@@ -168,7 +170,7 @@ void StarRenderer::renderOpenGL()
 
         // Outer glow disc
         juce::gl::glBegin(juce::gl::GL_TRIANGLE_FAN);
-        juce::gl::glColor4f(r, g, b, brt);
+        juce::gl::glColor4f(r, g, b, juce::jmax(0.30f, brt));
         juce::gl::glVertex2f(px, py);
         constexpr int segs = 10;
         for (int i = 0; i <= segs; ++i)
@@ -184,7 +186,7 @@ void StarRenderer::renderOpenGL()
         {
             const float cr = rad * 0.3f;
             juce::gl::glBegin(juce::gl::GL_TRIANGLE_FAN);
-            juce::gl::glColor4f(1.0f, 1.0f, 1.0f, brt * 0.75f);
+            juce::gl::glColor4f(1.0f, 1.0f, 1.0f, juce::jmax(0.35f, brt * 0.75f));
             juce::gl::glVertex2f(px, py);
             for (int i = 0; i <= segs; ++i)
             {

@@ -37,6 +37,7 @@ private:
 
     juce::Label title { {}, "StarFlux" };
     juce::ComboBox presetBox;
+    juce::TextButton inputModeButton { "Audio" };
     juce::ShapeButton controlsButton { "controlsButton",
                                        juce::Colours::transparentBlack,
                                        juce::Colours::transparentBlack,
@@ -48,6 +49,7 @@ private:
     float buttonAlpha = 1.0f;
     float idleTimer   = 0.0f;
     float fallbackTime = 0.0f;
+    bool useMidiInputMode = false;
     juce::Point<float> lastDragPos;
     std::vector<FallbackStar> fallbackStars;
 

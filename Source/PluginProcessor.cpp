@@ -76,8 +76,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout StarFluxAudioProcessor::crea
 
     auto lane = [&](auto amount, auto source, auto fmin, auto fmax, auto a, auto r, const String& name)
     {
-        p.push_back(f(amount, name + " Amount", 0.0f, 2.0f, 0.0f));
-        p.push_back(std::make_unique<AudioParameterChoice>(source, name + " Source", StringArray{ "Off", "Audio", "MIDI" }, 0));
+        p.push_back(f(amount, name + " Amount", 0.0f, 2.0f, 0.55f));
+        p.push_back(std::make_unique<AudioParameterChoice>(source, name + " Source", StringArray{ "Off", "Audio", "MIDI" }, 1));
         p.push_back(f(fmin, name + " Freq Min", 20.0f, 12000.0f, 20.0f));
         p.push_back(f(fmax, name + " Freq Max", 200.0f, 20000.0f, 6000.0f));
         p.push_back(f(a, name + " Attack", 0.001f, 1.0f, 0.035f));

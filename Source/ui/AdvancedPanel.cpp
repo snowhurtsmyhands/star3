@@ -30,8 +30,6 @@ void AdvancedPanel::setupSlider(juce::Slider& s, const juce::String& name, int d
 
 void AdvancedPanel::setupLane(LaneCard& lane, juce::Component& parent, const juce::String&)
 {
-    lane.source.addItemList({ "Off", "Audio", "MIDI" }, 1);
-    parent.addAndMakeVisible(lane.source);
     setupSlider(lane.amount, "Amount", 2);
     setupSlider(lane.freqMin, "Freq Min", 0);
     setupSlider(lane.freqMax, "Freq Max", 0);
@@ -105,7 +103,6 @@ int AdvancedPanel::addSliderRow(int y, juce::Slider& s, int w)
 int AdvancedPanel::addLaneCard(int y, LaneCard& lane, const juce::String& title, int w)
 {
     y = addTitle(y, title, w);
-    lane.source.setBounds(10, y, w - 20, 24); y += 28;
     for (auto* s : { &lane.amount, &lane.freqMin, &lane.freqMax, &lane.attack, &lane.release }) y = addSliderRow(y, *s, w);
     return y + 4;
 }

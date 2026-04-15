@@ -36,6 +36,28 @@ StarFluxAudioProcessorEditor::StarFluxAudioProcessorEditor(StarFluxAudioProcesso
     presetBox.setColour(juce::ComboBox::outlineColourId,    juce::Colour(0x553a84c6));
     addAndMakeVisible(presetBox);
 
+    inputModeButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0x22000000));
+    inputModeButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffb4d2f1));
+    inputModeButton.setColour(juce::TextButton::outlineColourId, juce::Colour(0x553a84c6));
+    inputModeButton.onClick = [this]
+    {
+        useMidiInputMode = !useMidiInputMode;
+        inputModeButton.setButtonText(useMidiInputMode ? "MIDI" : "Audio");
+
+        const int sourceIndex = useMidiInputMode ? 2 : 1;
+        for (auto* id : { starflux::params::motionLaneSource, starflux::params::sizeLaneSource,
+                          starflux::params::brightnessLaneSource, starflux::params::twinkleLaneSource })
+        {
+            if (auto* p = processor.apvts.getParameter(id))
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost(p->convertTo0to1((float) sourceIndex));
+                p->endChangeGesture();
+            }
+        }
+    };
+    addAndMakeVisible(inputModeButton);
+
     addAndMakeVisible(controlsPanel);
 
     openGL.setRenderer(&renderer);
@@ -73,28 +95,24 @@ StarFluxAudioProcessorEditor::StarFluxAudioProcessorEditor(StarFluxAudioProcesso
     sa(controlsPanel.twinkleAmount,twinkleAmount);
     sa(controlsPanel.twinkleSpeed, twinkleSpeed);
 
-    ca(controlsPanel.motionLane.source,   motionLaneSource);
     sa(controlsPanel.motionLane.amount,   motionLaneAmount);
     sa(controlsPanel.motionLane.freqMin,  motionLaneFreqMin);
     sa(controlsPanel.motionLane.freqMax,  motionLaneFreqMax);
     sa(controlsPanel.motionLane.attack,   motionLaneAttack);
     sa(controlsPanel.motionLane.release,  motionLaneRelease);
 
-    ca(controlsPanel.sizeLane.source,     sizeLaneSource);
     sa(controlsPanel.sizeLane.amount,     sizeLaneAmount);
     sa(controlsPanel.sizeLane.freqMin,    sizeLaneFreqMin);
     sa(controlsPanel.sizeLane.freqMax,    sizeLaneFreqMax);
     sa(controlsPanel.sizeLane.attack,     sizeLaneAttack);
     sa(controlsPanel.sizeLane.release,    sizeLaneRelease);
 
-    ca(controlsPanel.brightnessLane.source,   brightnessLaneSource);
     sa(controlsPanel.brightnessLane.amount,   brightnessLaneAmount);
     sa(controlsPanel.brightnessLane.freqMin,  brightnessLaneFreqMin);
     sa(controlsPanel.brightnessLane.freqMax,  brightnessLaneFreqMax);
     sa(controlsPanel.brightnessLane.attack,   brightnessLaneAttack);
     sa(controlsPanel.brightnessLane.release,  brightnessLaneRelease);
 
-    ca(controlsPanel.twinkleLane.source,  twinkleLaneSource);
     sa(controlsPanel.twinkleLane.amount,  twinkleLaneAmount);
     sa(controlsPanel.twinkleLane.freqMin, twinkleLaneFreqMin);
     sa(controlsPanel.twinkleLane.freqMax, twinkleLaneFreqMax);
@@ -106,6 +124,17 @@ StarFluxAudioProcessorEditor::StarFluxAudioProcessorEditor(StarFluxAudioProcesso
     sa(controlsPanel.midiSustain,  midiSustain);
     sa(controlsPanel.midiRelease,  midiRelease);
 
+    if (auto* source = processor.apvts.getRawParameterValue(motionLaneSource))
+        useMidiInputMode = ((int) source->load(std::memory_order_relaxed) == 2);
+    inputModeButton.setButtonText(useMidiInputMode ? "MIDI" : "Audio");
+    {
+        const int sourceIndex = useMidiInputMode ? 2 : 1;
+        for (auto* id : { starflux::params::motionLaneSource, starflux::params::sizeLaneSource,
+                          starflux::params::brightnessLaneSource, starflux::params::twinkleLaneSource })
+            if (auto* p = processor.apvts.getParameter(id))
+                p->setValueNotifyingHost(p->convertTo0to1((float) sourceIndex));
+    }
+
     startTimerHz(60);
 }
 
@@ -114,10 +143,6 @@ StarFluxAudioProcessorEditor::~StarFluxAudioProcessorEditor() { openGL.detach();
 void StarFluxAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour::fromRGB(3, 5, 10));
-
-    // CPU fallback only if OpenGL renderer is not outputting visible stars.
-    if (renderer.hasVisibleStars())
-        return;
 
     auto* densityP = processor.apvts.getRawParameterValue(starflux::params::density);
     auto* sizeP = processor.apvts.getRawParameterValue(starflux::params::size);
@@ -171,12 +196,14 @@ void StarFluxAudioProcessorEditor::resized()
 
     title.setBounds(panelX, btnSize + margin + 6,  drawerWidth, 16);
     presetBox.setBounds(panelX, btnSize + margin + 26, drawerWidth, 24);
+    inputModeButton.setBounds(panelX, btnSize + margin + 54, drawerWidth, 20);
 
     title.setVisible(showHeaderInfo);
     presetBox.setVisible(showHeaderInfo);
+    inputModeButton.setVisible(showHeaderInfo);
 
     // ── Sliding panel ──
-    const int panelTop = btnSize + margin + 58;
+    const int panelTop = btnSize + margin + 80;
     auto panel = juce::Rectangle<int>(panelX, panelTop,
                                       (int)(drawerWidth * drawerAnim),
                                       getHeight() - panelTop - margin);
@@ -188,6 +215,7 @@ void StarFluxAudioProcessorEditor::resized()
     controlsPanel.setAlpha(1.0f);
     title.setAlpha(1.0f);
     presetBox.setAlpha(1.0f);
+    inputModeButton.setAlpha(1.0f);
 }
 
 void StarFluxAudioProcessorEditor::mouseMove(const juce::MouseEvent&)

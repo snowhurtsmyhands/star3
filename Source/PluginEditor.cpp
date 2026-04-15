@@ -30,6 +30,7 @@ StarFluxAudioProcessorEditor::StarFluxAudioProcessorEditor(StarFluxAudioProcesso
     addAndMakeVisible(title);
 
     // Preset combo — shown below title when open
+    presetBox.addItemList({ "Static", "Drift", "Forward", "Float" }, 1);
     presetBox.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff0a1018));
     presetBox.setColour(juce::ComboBox::textColourId,       juce::Colour(0xffa0b8d8));
     presetBox.setColour(juce::ComboBox::outlineColourId,    juce::Colour(0x553a84c6));
@@ -39,7 +40,21 @@ StarFluxAudioProcessorEditor::StarFluxAudioProcessorEditor(StarFluxAudioProcesso
 
     openGL.setRenderer(&renderer);
     openGL.attachTo(*this);
+    openGL.setComponentPaintingEnabled(true);
     openGL.setContinuousRepainting(true);
+
+    juce::Random rng(0x5f5f91);
+    fallbackStars.reserve(1400);
+    for (int i = 0; i < 1400; ++i)
+    {
+        FallbackStar s;
+        s.pos = { rng.nextFloat(), rng.nextFloat() };
+        s.vel = { (rng.nextFloat() - 0.5f) * 0.013f, (rng.nextFloat() - 0.5f) * 0.013f };
+        s.phase = rng.nextFloat() * juce::MathConstants<float>::twoPi;
+        s.size = 0.35f + rng.nextFloat() * 1.3f;
+        s.brightness = 0.5f + rng.nextFloat() * 0.7f;
+        fallbackStars.push_back(s);
+    }
 
     using namespace starflux::params;
     auto& s = processor.apvts;
@@ -99,6 +114,43 @@ StarFluxAudioProcessorEditor::~StarFluxAudioProcessorEditor() { openGL.detach();
 void StarFluxAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour::fromRGB(3, 5, 10));
+
+    auto* densityP = processor.apvts.getRawParameterValue(starflux::params::density);
+    auto* sizeP = processor.apvts.getRawParameterValue(starflux::params::size);
+    auto* brightP = processor.apvts.getRawParameterValue(starflux::params::brightness);
+    auto* twinkleP = processor.apvts.getRawParameterValue(starflux::params::twinkleOn);
+    auto* twinkleAmtP = processor.apvts.getRawParameterValue(starflux::params::twinkleAmount);
+
+    const float density = densityP ? densityP->load(std::memory_order_relaxed) : 0.62f;
+    const float size    = sizeP ? sizeP->load(std::memory_order_relaxed) : 0.95f;
+    const float bright  = brightP ? brightP->load(std::memory_order_relaxed) : 1.25f;
+    const bool twinkleOn = twinkleP ? twinkleP->load(std::memory_order_relaxed) > 0.5f : true;
+    const float twinkleAmount = twinkleAmtP ? twinkleAmtP->load(std::memory_order_relaxed) : 0.35f;
+
+    const int visibleCount = juce::jlimit(280, (int) fallbackStars.size(),
+                                          (int) std::round((float) fallbackStars.size() * juce::jlimit(0.2f, 1.0f, density)));
+    const float baseRadius = juce::jmap(size, 0.2f, 1.8f, 0.8f, 2.4f);
+    const float alphaScale = juce::jlimit(0.25f, 1.3f, bright * 0.72f);
+
+    for (int i = 0; i < visibleCount; ++i)
+    {
+        const auto& s = fallbackStars[(size_t) i];
+        const float cx = s.pos.x * (float) getWidth();
+        const float cy = s.pos.y * (float) getHeight();
+        const float tw = twinkleOn ? (1.0f + (0.15f + twinkleAmount * 0.25f) * std::sin(fallbackTime * 1.9f + s.phase)) : 1.0f;
+        const float radius = baseRadius * s.size * (0.55f + 0.45f * tw);
+        const float a = juce::jlimit(0.06f, 0.95f, s.brightness * alphaScale * (0.65f + 0.35f * tw));
+
+        g.setColour(juce::Colour(0xff8fc5ff).withAlpha(a * 0.75f));
+        g.fillEllipse(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f);
+
+        if (a > 0.45f)
+        {
+            const float core = radius * 0.45f;
+            g.setColour(juce::Colours::white.withAlpha(a * 0.65f));
+            g.fillEllipse(cx - core, cy - core, core * 2.0f, core * 2.0f);
+        }
+    }
 }
 
 void StarFluxAudioProcessorEditor::resized()
@@ -183,5 +235,19 @@ void StarFluxAudioProcessorEditor::timerCallback()
         buttonAlpha = juce::jmax(minButtonAlpha, buttonAlpha - fadeRate);
     }
 
+    fallbackTime += dt;
+    auto* speedP = processor.apvts.getRawParameterValue(starflux::params::motionSpeed);
+    const float speed = speedP ? speedP->load(std::memory_order_relaxed) : 0.08f;
+    const float drift = juce::jmap(speed, 0.0f, 1.5f, 0.25f, 3.5f) * dt;
+    for (auto& s : fallbackStars)
+    {
+        s.pos += s.vel * drift;
+        if (s.pos.x < 0.0f) s.pos.x += 1.0f;
+        if (s.pos.x > 1.0f) s.pos.x -= 1.0f;
+        if (s.pos.y < 0.0f) s.pos.y += 1.0f;
+        if (s.pos.y > 1.0f) s.pos.y -= 1.0f;
+    }
+
     resized();
+    repaint();
 }

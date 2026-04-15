@@ -17,6 +17,15 @@ public:
     void mouseDrag(const juce::MouseEvent&) override;
 
 private:
+    struct FallbackStar
+    {
+        juce::Point<float> pos;
+        juce::Point<float> vel;
+        float phase = 0.0f;
+        float size = 1.0f;
+        float brightness = 1.0f;
+    };
+
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
@@ -38,7 +47,9 @@ private:
     float drawerAnim  = 0.0f;
     float buttonAlpha = 1.0f;
     float idleTimer   = 0.0f;
+    float fallbackTime = 0.0f;
     juce::Point<float> lastDragPos;
+    std::vector<FallbackStar> fallbackStars;
 
     std::vector<std::unique_ptr<SliderAttachment>> sliderAttachments;
     std::vector<std::unique_ptr<ButtonAttachment>> buttonAttachments;

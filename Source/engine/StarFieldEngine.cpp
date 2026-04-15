@@ -36,6 +36,7 @@ void StarFieldEngine::update(float dt, float timelinePhase, const dsp::AnalysisF
     const int minVisibleStars = juce::jmin(700, (int) stars.size());
     const int byDensity = (int) std::round(stars.size() * juce::jlimit(0.20f, 1.0f, density));
     const int activeCount = juce::jlimit(1, (int) stars.size(), juce::jmax(minVisibleStars, byDensity));
+    const float audioLift = 1.0f + juce::jlimit(0.0f, 0.95f, analysis.rms * 2.2f + analysis.transient * 0.35f);
 
     for (int i = 0; i < activeCount; ++i)
     {
@@ -52,14 +53,14 @@ void StarFieldEngine::update(float dt, float timelinePhase, const dsp::AnalysisF
         wrapStar(s, runtimeRng);
 
         const float near = juce::jlimit(0.0f, 1.0f, 1.0f - ((s.pos.z + 1.25f) / 2.5f));
-        float b = s.brightness * brightness * (0.78f + near * 0.52f) * (1.0f + brightnessMod);
+        float b = s.brightness * brightness * (0.78f + near * 0.52f) * (1.0f + brightnessMod) * audioLift;
         if (twinkleOn)
             b *= 1.0f + (twinkleAmount + twinkleMod) * 0.35f * std::sin(s.phase + timelinePhase * twinkleSpeed * 6.0f + analysis.high * 8.0f);
 
         b = juce::jmax(0.12f, b);
 
         const float depthSafe = juce::jlimit(0.35f, 1.45f, depth);
-        float sz = size * s.size * (0.62f + near) * (1.0f + sizeMod * 0.45f);
+        float sz = size * s.size * (0.62f + near) * (1.0f + sizeMod * 0.45f) * (1.0f + analysis.transient * 0.12f);
         renderStars[(size_t) i] = { { s.pos.x, s.pos.y, s.pos.z * depthSafe }, b, juce::jlimit(0.35f, 2.4f, sz) };
     }
 

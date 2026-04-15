@@ -115,6 +115,10 @@ void StarFluxAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour::fromRGB(3, 5, 10));
 
+    // CPU fallback only if OpenGL renderer is not outputting visible stars.
+    if (renderer.hasVisibleStars())
+        return;
+
     auto* densityP = processor.apvts.getRawParameterValue(starflux::params::density);
     auto* sizeP = processor.apvts.getRawParameterValue(starflux::params::size);
     auto* brightP = processor.apvts.getRawParameterValue(starflux::params::brightness);

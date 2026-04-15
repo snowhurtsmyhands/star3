@@ -30,7 +30,7 @@ void AdvancedPanel::setupSlider(juce::Slider& s, const juce::String& name, int d
 
 void AdvancedPanel::setupLane(LaneCard& lane, juce::Component& parent, const juce::String&)
 {
-    lane.source.addItemList({ "Off", "Audio Env", "Transient", "MIDI Gate", "MIDI Vel" }, 1);
+    lane.source.addItemList({ "Off", "Audio", "MIDI" }, 1);
     parent.addAndMakeVisible(lane.source);
     setupSlider(lane.amount, "Amount", 2);
     setupSlider(lane.freqMin, "Freq Min", 0);

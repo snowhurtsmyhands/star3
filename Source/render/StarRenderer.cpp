@@ -110,9 +110,7 @@ void StarRenderer::renderOpenGL()
 
         float raw = 0.0f;
         if      (source == 1) raw = bandEnergy(analysis, minHz, maxHz);
-        else if (source == 2) raw = analysis.transient;
-        else if (source == 3) raw = midiEnv > 0.02f ? 1.0f : 0.0f;
-        else if (source == 4) raw = midiEnv;
+        else if (source == 2) raw = midiEnv;
 
         state = smoothTowards(state, juce::jlimit(0.0f, 1.0f, raw), attack, release, dt);
         return state * amount;
@@ -220,6 +218,8 @@ void StarRenderer::renderOpenGL()
     }
 
     // Safety fallback: always draw at least a tiny center glint if everything was culled.
+    outputHasVisibleStars.store(starsDrawn > 0, std::memory_order_relaxed);
+
     if (starsDrawn == 0)
     {
         juce::gl::glBegin(juce::gl::GL_TRIANGLE_FAN);

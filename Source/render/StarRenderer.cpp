@@ -45,6 +45,25 @@ void StarRenderer::newOpenGLContextCreated()
 
 void StarRenderer::renderOpenGL()
 {
+    if (auto* ctx = juce::OpenGLContext::getCurrentContext())
+    {
+        if (auto* target = ctx->getTargetComponent())
+        {
+            const auto fbW = juce::roundToInt((float) ctx->getRenderingScale() * (float) target->getWidth());
+            const auto fbH = juce::roundToInt((float) ctx->getRenderingScale() * (float) target->getHeight());
+            juce::gl::glViewport(0, 0, juce::jmax(1, fbW), juce::jmax(1, fbH));
+        }
+    }
+
+    juce::gl::glDisable(juce::gl::GL_DEPTH_TEST);
+    juce::gl::glDisable(juce::gl::GL_CULL_FACE);
+    juce::gl::glDisable(juce::gl::GL_SCISSOR_TEST);
+    juce::gl::glMatrixMode(juce::gl::GL_PROJECTION);
+    juce::gl::glLoadIdentity();
+    juce::gl::glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
+    juce::gl::glMatrixMode(juce::gl::GL_MODELVIEW);
+    juce::gl::glLoadIdentity();
+
     juce::OpenGLHelpers::clear(juce::Colour::fromRGB(3, 5, 10));
     juce::gl::glEnable(juce::gl::GL_BLEND);
     juce::gl::glBlendFunc(juce::gl::GL_SRC_ALPHA, juce::gl::GL_ONE_MINUS_SRC_ALPHA);
@@ -140,6 +159,7 @@ void StarRenderer::renderOpenGL()
     const float audioEnergy    = juce::jlimit(0.0f, 1.0f, analysis.rms * 5.0f);
     const float audioBrightMul = 1.0f + audioEnergy * 0.65f;
 
+    int starsDrawn = 0;
     for (const auto& s : starField.getRenderStars())
     {
         if (s.brightness <= 0.0005f)
@@ -180,6 +200,7 @@ void StarRenderer::renderOpenGL()
                                   py + std::sin(a) * rad);
         }
         juce::gl::glEnd();
+        ++starsDrawn;
 
         // Bright white core for larger / bright stars — premium sparkle
         if (brt > 0.45f)
@@ -196,6 +217,22 @@ void StarRenderer::renderOpenGL()
             }
             juce::gl::glEnd();
         }
+    }
+
+    // Safety fallback: always draw at least a tiny center glint if everything was culled.
+    if (starsDrawn == 0)
+    {
+        juce::gl::glBegin(juce::gl::GL_TRIANGLE_FAN);
+        juce::gl::glColor4f(0.75f, 0.88f, 1.0f, 0.95f);
+        juce::gl::glVertex2f(0.0f, 0.0f);
+        constexpr int segs = 12;
+        constexpr float rad = 0.015f;
+        for (int i = 0; i <= segs; ++i)
+        {
+            const float a = juce::MathConstants<float>::twoPi * (float) i / (float) segs;
+            juce::gl::glVertex2f(std::cos(a) * rad, std::sin(a) * rad);
+        }
+        juce::gl::glEnd();
     }
 }
 
